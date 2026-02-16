@@ -1,2 +1,5 @@
 /target
 *.jsonl
+*.log
+.venv/
+tests/.venv/
