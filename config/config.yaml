@@ -1,0 +1,32 @@
+# safety-mitts configuration
+
+openclaw:
+  # Path to the OpenClaw binary
+  binary: "openclaw"
+  # Arguments passed to OpenClaw on startup
+  args: ["gateway", "start"]
+  # Maximum automatic restart attempts before giving up
+  max_restarts: 5
+  # Seconds to wait between restart attempts
+  restart_delay_secs: 3
+
+network:
+  # Address safety-mitts listens on (external-facing)
+  listen_addr: "127.0.0.1:18789"
+  # Address OpenClaw binds to (internal, proxied)
+  upstream_addr: "127.0.0.1:18790"
+
+logging:
+  # tracing log level: trace, debug, info, warn, error
+  level: "info"
+  # Path to the append-only audit log file
+  audit_log_path: "./audit.jsonl"
+
+# Path to the policy rules file
+policy_file: "./policy.yaml"
+
+sanitizer:
+  # Enable prompt injection scanning
+  enabled: true
+  # Mode: "flag" (log only), "strip" (remove), "wrap" (add delimiters)
+  mode: "flag"

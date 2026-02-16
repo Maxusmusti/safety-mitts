@@ -1,0 +1,182 @@
+# safety-mitts default policy
+# Posture: default-allow with logging
+version: "1.0"
+
+default_action: allow
+
+# Allowed WebSocket origins (glob patterns).
+# Non-browser clients (CLI, curl) without an Origin header are always allowed.
+origin_allowlist:
+  - "http://localhost:*"
+  - "http://127.0.0.1:*"
+  - "https://localhost:*"
+  - "https://127.0.0.1:*"
+
+network_policy:
+  openclaw_bind: "127.0.0.1"
+  listen_bind: "127.0.0.1"
+  listen_port: 18789
+  upstream_port: 18790
+
+rules:
+  # ═══════════════════════════════════════════════════════════════════
+  # HARD-GATE RULES (block entirely) — highest priority
+  # ═══════════════════════════════════════════════════════════════════
+
+  - name: block-gateway-escape
+    description: "Prevent sandbox escape via config tampering"
+    priority: 1
+    action: hard_gate
+    matchers:
+      - type: method
+        pattern: "config.set|config.patch"
+
+  - name: block-approval-disable
+    description: "Prevent disabling execution approval requirements"
+    priority: 2
+    action: hard_gate
+    matchers:
+      - type: method
+        pattern: "exec.approval.set|exec.approval.disable"
+
+  - name: block-reverse-shells
+    description: "Block common reverse shell patterns"
+    priority: 3
+    action: hard_gate
+    matchers:
+      - type: command
+        is_regex: true
+        pattern: "bash\\s+-i\\s+>&\\s+/dev/tcp/|nc\\s+(-e|--exec)\\s+/bin/(ba)?sh|python.*socket.*connect.*subprocess|/dev/tcp/|ncat\\s+(-e|--exec)"
+
+  - name: block-crypto-miners
+    description: "Block known cryptocurrency mining binaries"
+    priority: 4
+    action: hard_gate
+    matchers:
+      - type: command
+        pattern: "*xmrig*|*minerd*|*cpuminer*|*cgminer*|*ethminer*|*bfgminer*"
+
+  - name: block-destructive-commands
+    description: "Block catastrophically destructive commands"
+    priority: 5
+    action: hard_gate
+    matchers:
+      - type: command
+        pattern: "rm -rf /|rm -rf /*|mkfs *|dd if=* of=/dev/*"
+      - type: command
+        is_regex: true
+        pattern: "^(sudo\\s+)?(rm|chmod|chown)\\s+.*-[rR].*\\s+/$"
+
+  - name: block-sensitive-file-access
+    description: "Block access to credential and key files"
+    priority: 6
+    action: hard_gate
+    matchers:
+      - type: file_path
+        pattern: "/etc/shadow"
+        operations: [read, write]
+      - type: file_path
+        pattern: "~/.ssh/id_*"
+        operations: [read, write]
+      - type: file_path
+        pattern: "**/.env"
+        operations: [read]
+      - type: file_path
+        pattern: "**/credentials*"
+        operations: [read]
+      - type: file_path
+        pattern: "**/*.pem"
+        operations: [read, write]
+      - type: file_path
+        pattern: "**/private_key*"
+        operations: [read, write]
+
+  - name: block-exfiltration-curl
+    description: "Block curl/wget POSTing to unknown external hosts"
+    priority: 7
+    action: hard_gate
+    matchers:
+      - type: command
+        is_regex: true
+        pattern: "(curl|wget)\\s+.*--data.*@.*(ssh|env|shadow|credential|password|secret|token)"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # AUTO-ALLOW RULES — low-priority, for common safe operations
+  # ═══════════════════════════════════════════════════════════════════
+
+  - name: allow-read-operations
+    description: "Read-only method calls are always safe"
+    priority: 10
+    action: auto_allow
+    matchers:
+      - type: method
+        pattern: "config.get|sessions.list|sessions.history|channels.status|system.presence|system.info"
+
+  - name: allow-basic-commands
+    description: "Common read-only shell commands"
+    priority: 11
+    action: auto_allow
+    matchers:
+      - type: command
+        pattern: "ls *|cat *|head *|tail *|wc *|pwd|whoami|date|echo *|which *|type *|file *"
+
+  # ═══════════════════════════════════════════════════════════════════
+  # SOFT-GATE RULES (allow + warning log) — medium priority
+  # ═══════════════════════════════════════════════════════════════════
+
+  - name: warn-file-write
+    description: "Log all file write and delete operations"
+    priority: 50
+    action: soft_gate
+    matchers:
+      - type: file_path
+        pattern: "**/*"
+        operations: [write, delete]
+
+  - name: warn-network-commands
+    description: "Flag commands that make outbound network requests"
+    priority: 55
+    action: soft_gate
+    matchers:
+      - type: command
+        pattern: "curl *|wget *|ssh *|scp *|rsync *|nc *|ncat *|telnet *"
+
+  - name: warn-package-install
+    description: "Flag package manager operations"
+    priority: 56
+    action: soft_gate
+    matchers:
+      - type: command
+        pattern: "npm install*|pip install*|pip3 install*|cargo install*|brew install*|apt install*|apt-get install*|gem install*"
+
+  - name: warn-permission-changes
+    description: "Flag permission and ownership changes"
+    priority: 57
+    action: soft_gate
+    matchers:
+      - type: command
+        pattern: "chmod *|chown *|chgrp *"
+
+  - name: warn-process-management
+    description: "Flag process kill and signal commands"
+    priority: 58
+    action: soft_gate
+    matchers:
+      - type: command
+        pattern: "kill *|killall *|pkill *"
+
+  - name: warn-sudo
+    description: "Flag all sudo usage"
+    priority: 59
+    action: soft_gate
+    matchers:
+      - type: command
+        pattern: "sudo *"
+
+  - name: warn-docker-exec
+    description: "Flag docker exec and run commands"
+    priority: 60
+    action: soft_gate
+    matchers:
+      - type: command
+        pattern: "docker exec *|docker run *|docker compose *"

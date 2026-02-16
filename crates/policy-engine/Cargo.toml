@@ -1,0 +1,15 @@
+[package]
+name = "policy-engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yml = { workspace = true }
+regex = { workspace = true }
+globset = "0.4"
+tracing = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
